@@ -1,0 +1,57 @@
+cmake_minimum_required(VERSION 3.15)
+project(lockfree_queue VERSION 1.0.0 LANGUAGES CXX)
+
+# C++17 표준 사용 (atomic, memory_order 등을 위해)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# 컴파일 옵션
+if(MSVC)
+    add_compile_options(/W4 /WX)
+else()
+    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
+    # 최적화 옵션
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(-O3 -march=native)
+    endif()
+endif()
+
+# 인클루드 디렉토리
+include_directories(${PROJECT_SOURCE_DIR}/include)
+
+# 메인 실행 파일
+add_executable(main
+    src/main.cpp
+ "include/spsc_queue.h" "include/mpmc_queue.h")
+
+# 벤치마크 실행 파일
+add_executable(benchmark
+    src/benchmark.cpp
+ "include/spsc_queue.h" "include/mpmc_queue.h")
+
+# 테스트 옵션
+option(BUILD_TESTS "Build test programs" ON)
+
+if(BUILD_TESTS)
+    # SPSC 테스트
+    add_executable(test_spsc
+        tests/test_spsc.cpp
+     "include/spsc_queue.h" "include/mpmc_queue.h")
+
+    # MPMC 테스트
+    add_executable(test_mpmc
+        tests/test_mpmc.cpp
+     "include/spsc_queue.h" "include/mpmc_queue.h")
+    
+    # CTest 통합
+    enable_testing()
+    add_test(NAME SPSCTest COMMAND test_spsc)
+    add_test(NAME MPMCTest COMMAND test_mpmc)
+endif()
+
+# 빌드 정보 출력
+message(STATUS "Lockfree Queue Configuration:")
+message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
+message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "  Build Tests: ${BUILD_TESTS}")
