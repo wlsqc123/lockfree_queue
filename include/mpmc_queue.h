@@ -2,6 +2,9 @@
 #include <cstddef>
 #include "define.h"
 
+#pragma warning(push)
+#pragma warning(disable: 4324)
+
 // Multi Producer Multi Consumer Lock-Free Queue
 // 여러 스레드에서 동시에 push/pop 작업을 수행하는 큐
 // CAS(Compare-And-Swap) 연산 사용
@@ -18,28 +21,27 @@ public:
     MPMCQueue &operator=(const MPMCQueue &) = delete;
 
     // 여러 스레드에서 안전 호출 가능
-    bool Push(const T &item);
-    bool Push(T &&item);
-    bool Pop(T &item);
+    bool Push(const T &_item);
+    bool Push(T &&_item);
+    bool Pop(T &_item);
 
     bool IsEmpty() const;
     size_t GetSize() const;
     constexpr size_t GetCapacity() const { return Size; }
 
 private:
-    static constexpr size_t CACHE_LINE_SIZE = 64;
-
     // 각 슬롯의 상태를 관리하는 구조체
     // ABA 문제 해결을 위한 generation 카운터
     struct Slot
     {
-        std::atomic<size_t> generation;
-        T data;
+        std::atomic<size_t> _generation;
+        T _data;
     };
 
-    alignas(CACHE_LINE_SIZE) Slot p_buffer_[Size];
-    alignas(CACHE_LINE_SIZE) std::atomic<size_t> p_head;
-    alignas(CACHE_LINE_SIZE) std::atomic<size_t> p_tail;
+    Slot p_buffer[Size];
+
+    alignas(lfq::CACHE_LINE_SIZE) std::atomic<size_t> p_head;
+    alignas(lfq::CACHE_LINE_SIZE) std::atomic<size_t> p_tail;
 };
 
 // ============================================================
@@ -53,7 +55,7 @@ MPMCQueue<T, Size>::MPMCQueue() : p_head(0), p_tail(0)
     // 각 슬롯의 generation 초기화
     for (size_t i = 0; i < Size; ++i)
     {
-        p_buffer_[i].generation.store(i, std::memory_order_relaxed);
+        p_buffer[i]._generation.store(i, std::memory_order_relaxed);
     }
 }
 
@@ -109,7 +111,8 @@ size_t MPMCQueue<T, Size>::GetSize() const
     }
     else
     {
-        // 언더플로우 발생한 경우 처리
         return 0;
     }
 }
+
+#pragma warning(pop)

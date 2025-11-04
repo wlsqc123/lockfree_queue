@@ -5,7 +5,7 @@
 #include "define.h"
 
 #pragma warning(push)
-#pragma warning(disable: 4324) // 구조체가 alignas로 패딩됨 (의도된 동작)
+#pragma warning(disable: 4324) // 구조체가 alignas로 패딩됨
 
 // Two-Lock Multi Producer Multi Consumer Queue
 // 성능 비교를 위한 two-lock 기반 큐
@@ -23,9 +23,9 @@ public:
     MutexQueue &operator=(const MutexQueue &) = delete;
 
     // 여러 스레드에서 안전 호출 가능
-    bool Push(const T &item);
-    bool Push(T &&item);
-    bool Pop(T &item);
+    bool Push(const T &_item);
+    bool Push(T &&_item);
+    bool Pop(T &_item);
 
     bool IsEmpty() const;
     size_t GetSize() const;
@@ -35,8 +35,8 @@ private:
     // MPMCQueue와 동일한 메모리 레이아웃을 위한 슬롯 구조체
     struct Slot
     {
-        size_t dummy_generation;  // 메모리 레이아웃 맞추기용 (사용 안함)
-        T data;
+        size_t _dummy_generation;  // 메모리 레이아웃 맞추기용 (사용 안함)
+        T _data;
     };
 
     Slot p_buffer[Size];
@@ -82,7 +82,7 @@ bool MutexQueue<T, Size>::Push(const T &item)
     }
 
     size_t _index = _tail & (Size - 1);
-    p_buffer[_index].data = item;
+    p_buffer[_index]._data = item;
 
     p_tail.store(_tail + 1, std::memory_order_release);
 
@@ -103,7 +103,7 @@ bool MutexQueue<T, Size>::Push(T &&item)
     }
 
     size_t _index = _tail & (Size - 1);
-    p_buffer[_index].data = std::move(item);
+    p_buffer[_index]._data = std::move(item);
 
     p_tail.store(_tail + 1, std::memory_order_release);
 
@@ -124,7 +124,7 @@ bool MutexQueue<T, Size>::Pop(T &item)
     }
 
     size_t _index = _head & (Size - 1);
-    item = std::move(p_buffer[_index].data);
+    item = std::move(p_buffer[_index]._data);
 
     p_head.store(_head + 1, std::memory_order_release);
 
