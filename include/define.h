@@ -2,17 +2,13 @@
 
 #include <cstddef>
 
-// 매개변수 방향 표시 매크로
-#define IN
-#define OUT
-
 // 공통 상수
 namespace lfq
 {
-    // CPU 캐시 라인 크기 (일반적으로 64바이트)
+    // CPU 캐시 라인 크기
     constexpr size_t CACHE_LINE_SIZE = 64;
 
     // 벤치마크 설정
     constexpr size_t QUEUE_SIZE = 1024;
-    constexpr size_t OPERATIONS_PER_THREAD = 100'000'00;
+    constexpr size_t OPERATIONS_PER_THREAD = 100'000'000;
 }
