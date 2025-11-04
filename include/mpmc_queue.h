@@ -3,8 +3,8 @@
 #include "define.h"
 
 // Multi Producer Multi Consumer Lock-Free Queue
-// ¿©·¯ ½º·¹µå¿¡¼­ µ¿½Ã¿¡ push/pop °¡´ÉÇÑ ¶ôÇÁ¸® Å¥
-// CAS(Compare-And-Swap) ±â¹İ ±¸Çö
+// ì—¬ëŸ¬ ìŠ¤ë ˆë“œì—ì„œ ë™ì‹œì— push/pop ì‘ì—…ì„ ìˆ˜í–‰í•˜ëŠ” í
+// CAS(Compare-And-Swap) ì—°ì‚° ì‚¬ìš©
 template <typename T, size_t Size>
 class MPMCQueue
 {
@@ -17,7 +17,7 @@ public:
     MPMCQueue &operator=(MPMCQueue &&) = delete;
     MPMCQueue &operator=(const MPMCQueue &) = delete;
 
-    // ¿©·¯ ½º·¹µå¿¡¼­ µ¿½Ã È£Ãâ °¡´É
+    // ì—¬ëŸ¬ ìŠ¤ë ˆë“œì—ì„œ ì•ˆì „ í˜¸ì¶œ ê°€ëŠ¥
     bool Push(const T &item);
     bool Push(T &&item);
     bool Pop(T &item);
@@ -29,8 +29,8 @@ public:
 private:
     static constexpr size_t CACHE_LINE_SIZE = 64;
 
-    // °¢ ½½·ÔÀÇ »óÅÂ¸¦ ÀúÀåÇÏ´Â ±¸Á¶Ã¼
-    // ABA ¹®Á¦ ÇØ°áÀ» À§ÇØ generation ¼±¾ğ
+    // ê° ìŠ¬ë¡¯ì˜ ìƒíƒœë¥¼ ê´€ë¦¬í•˜ëŠ” êµ¬ì¡°ì²´
+    // ABA ë¬¸ì œ í•´ê²°ì„ ìœ„í•œ generation ì¹´ìš´í„°
     struct Slot
     {
         std::atomic<size_t> generation;
@@ -43,14 +43,14 @@ private:
 };
 
 // ============================================================
-// ±¸Çö
+// êµ¬í˜„
 template <typename T, size_t Size>
 MPMCQueue<T, Size>::MPMCQueue() : p_head(0), p_tail(0)
 {
     static_assert(Size > 0, "Queue size must be greater than 0");
     static_assert((Size & (Size - 1)) == 0, "Queue size must be power of 2");
 
-    // °¢ ½½·ÔÀÇ generation ÃÊ±âÈ­
+    // ê° ìŠ¬ë¡¯ì˜ generation ì´ˆê¸°í™”
     for (size_t i = 0; i < Size; ++i)
     {
         p_buffer_[i].generation.store(i, std::memory_order_relaxed);
@@ -60,37 +60,37 @@ MPMCQueue<T, Size>::MPMCQueue() : p_head(0), p_tail(0)
 template <typename T, size_t Size>
 MPMCQueue<T, Size>::~MPMCQueue()
 {
-    // ³²Àº µ¥ÀÌÅÍ Á¤¸®
+    // ë‚¨ì€ ë°ì´í„° ì •ë¦¬
     T _item;
 
     while(true == Pop(OUT _item))
     {
-        // Pop¿¡¼­ ÀÚµ¿À¸·Î ¼Ò¸êÀÚ È£ÃâµÊ
+        // Popì—ì„œ ìë™ìœ¼ë¡œ ì†Œë©¸ì í˜¸ì¶œë¨
     }
 }
 
-// TODO: push ±¸Çö
+// TODO: push êµ¬í˜„
 template <typename T, size_t Size>
 bool MPMCQueue<T, Size>::Push(const T &item)
 {
     return true;
 }
 
-// TODO: push ±¸Çö
+// TODO: push êµ¬í˜„
 template <typename T, size_t Size>
 bool MPMCQueue<T, Size>::Push(T &&item)
 {
     return true;
 }
 
-// TODO: pop ±¸Çö
+// TODO: pop êµ¬í˜„
 template <typename T, size_t Size>
 bool MPMCQueue<T, Size>::Pop(T &item)
 {
     return true;
 }
 
-// TODO: pop ±¸Çö
+// TODO: IsEmpty êµ¬í˜„
 template <typename T, size_t Size>
 bool MPMCQueue<T, Size>::IsEmpty() const
 {
@@ -109,7 +109,7 @@ size_t MPMCQueue<T, Size>::GetSize() const
     }
     else
     {
-        // °ÅÀÇ ¹ß»ıÇÒ °æ¿ì ¾øÀ½
+        // ì–¸ë”í”Œë¡œìš° ë°œìƒí•œ ê²½ìš° ì²˜ë¦¬
         return 0;
     }
 }
