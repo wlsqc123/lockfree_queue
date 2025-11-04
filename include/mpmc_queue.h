@@ -71,18 +71,110 @@ MPMCQueue<T, Size>::~MPMCQueue()
     }
 }
 
-// TODO: push 구현
+// lvalue 참조 버전 Push 구현
 template <typename T, size_t Size>
-bool MPMCQueue<T, Size>::Push(const T &item)
+bool MPMCQueue<T, Size>::Push(const T &_item)
 {
-    return true;
+    size_t _head = m_head.load(std::memory_order_relaxed);
+
+    while (true)
+    {
+        // 현재 head 위치의 슬롯 계산
+        size_t _idx = _head & (Size - 1);
+        Slot& _slot = m_buffer[_idx];
+
+        // generation 읽기
+        size_t _generation = _slot._generation.load(std::memory_order_acquire);
+
+        // 이 슬롯에 쓸 수 있는지 확인
+        if (_generation == _head)
+        {
+            // head를 증가시켜 이 슬롯을 예약
+            if (m_head.compare_exchange_weak(_head, _head + 1, std::memory_order_relaxed))
+            {
+                // 데이터 복사
+                _slot._data = _item;
+
+                // generation을 증가시켜 Pop이 읽을 수 있게 함
+                _slot._generation.store(_head + 1, std::memory_order_release);
+                return true;
+            }
+        }
+        // 아직 Pop이 데이터를 가져가지 않음 (큐가 가득 참)
+        else if (_generation < _head)
+        {
+            // tail과 비교하여 정말 가득 찼는지 확인
+            size_t _tail = m_tail.load(std::memory_order_acquire);
+
+            if (_head >= _tail + Size)
+            {
+                // 큐가 가득 참
+                return false; 
+            }
+
+            // 다른 스레드가 Pop을 진행 중일 수 있으므로 재시도
+            _head = m_head.load(std::memory_order_relaxed);
+        }
+        // 다른 스레드에서 push 중인 경우 (generation > head)
+        else
+        {
+            // head를 다시 읽어서 재시도
+            _head = m_head.load(std::memory_order_relaxed);
+        }
+    }
 }
 
-// TODO: push 구현
+// (rvalue 참조 버전) Push 구현
 template <typename T, size_t Size>
-bool MPMCQueue<T, Size>::Push(T &&item)
+bool MPMCQueue<T, Size>::Push(T &&_item)
 {
-    return true;
+    size_t _head = m_head.load(std::memory_order_relaxed);
+
+    while (true)
+    {
+        // 현재 head 위치의 슬롯 계산
+        size_t _idx = _head & (Size - 1);
+        Slot& _slot = m_buffer[_idx];
+
+        // generation 읽기
+        size_t _generation = _slot._generation.load(std::memory_order_acquire);
+
+        // 이 슬롯에 쓸 수 있는지 확인
+        // generation이 head와 같으면 쓸 수 있음
+        if (_generation == _head)
+        {
+            // head를 증가시켜 이 슬롯을 예약
+            if (m_head.compare_exchange_weak(_head, _head + 1, std::memory_order_relaxed))
+            {
+                // 데이터 이동 (move semantics)
+                _slot._data = std::move(_item);
+
+                // generation을 증가시켜 Pop이 읽을 수 있게 함
+                _slot._generation.store(_head + 1, std::memory_order_release);
+                return true;
+            }
+        }
+        else if (_generation < _head)
+        {
+            // 아직 Pop이 데이터를 가져가지 않음 (큐가 가득 참)
+            // tail과 비교하여 정말 가득 찼는지 확인
+            size_t _tail = m_tail.load(std::memory_order_acquire);
+
+            if (_head >= _tail + Size)
+            {
+                return false; // 큐가 가득 참
+            }
+
+            // 다른 스레드가 Pop을 진행 중일 수 있으므로 재시도
+            _head = m_head.load(std::memory_order_relaxed);
+        }
+        else
+        {
+            // generation > head: 다른 스레드가 이미 이 위치에 Push 진행 중
+            // head를 다시 읽어서 재시도
+            _head = m_head.load(std::memory_order_relaxed);
+        }
+    }
 }
 
 // TODO: pop 구현
