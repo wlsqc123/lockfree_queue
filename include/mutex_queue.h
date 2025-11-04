@@ -41,10 +41,10 @@ private:
 
     Slot m_buffer[Size];
 
-    alignas(lfq::CACHE_LINE_SIZE) mutable std::mutex m_tail_mutex;
+    alignas(lfq::CACHE_LINE_SIZE) std::mutex m_tail_mutex;
     std::atomic<size_t> m_tail;
 
-    alignas(lfq::CACHE_LINE_SIZE) mutable std::mutex m_head_mutex;
+    alignas(lfq::CACHE_LINE_SIZE) std::mutex m_head_mutex;
     std::atomic<size_t> m_head;
 };
 
@@ -62,7 +62,7 @@ MutexQueue<T, Size>::~MutexQueue()
 {
     // 남은 데이터 정리
     T _item;
-    while (Pop(OUT _item))
+    while (Pop(_item))
     {
         // Pop에서 자동으로 소멸자 호출됨
     }
