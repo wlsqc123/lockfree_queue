@@ -22,12 +22,14 @@ include_directories(${PROJECT_SOURCE_DIR}/include)
 # 메인 실행 파일
 add_executable(main
     src/main.cpp
- "include/define.h")
+    include/define.h)
 
 # 벤치마크 실행 파일
 add_executable(benchmark
     src/benchmark.cpp
- "include/define.h")
+    include/define.h
+    include/mpmc_queue.h
+    include/mutex_queue.h)
 
 # 테스트 옵션
 option(BUILD_TESTS "Build test programs" ON)
@@ -35,8 +37,9 @@ option(BUILD_TESTS "Build test programs" ON)
 if(BUILD_TESTS)
     add_executable(test_mpmc
         tests/test_mpmc.cpp
-     "include/define.h")
-    
+        include/define.h
+        include/mpmc_queue.h)
+
     enable_testing()
     add_test(NAME MPMCTest COMMAND test_mpmc)
 endif()
