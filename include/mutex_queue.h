@@ -39,19 +39,19 @@ private:
         T _data;
     };
 
-    Slot p_buffer[Size];
+    Slot m_buffer[Size];
 
-    alignas(lfq::CACHE_LINE_SIZE) mutable std::mutex p_tail_mutex;
-    std::atomic<size_t> p_tail;
+    alignas(lfq::CACHE_LINE_SIZE) mutable std::mutex m_tail_mutex;
+    std::atomic<size_t> m_tail;
 
-    alignas(lfq::CACHE_LINE_SIZE) mutable std::mutex p_head_mutex;
-    std::atomic<size_t> p_head;
+    alignas(lfq::CACHE_LINE_SIZE) mutable std::mutex m_head_mutex;
+    std::atomic<size_t> m_head;
 };
 
 // ============================================================
 // 구현
 template <typename T, size_t Size>
-MutexQueue<T, Size>::MutexQueue() : p_tail(0), p_head(0)
+MutexQueue<T, Size>::MutexQueue() : m_tail(0), m_head(0)
 {
     static_assert(Size > 0, "Queue size must be greater than 0");
     static_assert((Size & (Size - 1)) == 0, "Queue size must be power of 2");
@@ -71,10 +71,10 @@ MutexQueue<T, Size>::~MutexQueue()
 template <typename T, size_t Size>
 bool MutexQueue<T, Size>::Push(const T &item)
 {
-    std::lock_guard<std::mutex> _lock(p_tail_mutex);
+    std::lock_guard<std::mutex> _lock(m_tail_mutex);
 
-    size_t _tail = p_tail.load(std::memory_order_relaxed);
-    size_t _head = p_head.load(std::memory_order_acquire);
+    size_t _tail = m_tail.load(std::memory_order_relaxed);
+    size_t _head = m_head.load(std::memory_order_acquire);
 
     if (_tail - _head >= Size)
     {
@@ -82,9 +82,9 @@ bool MutexQueue<T, Size>::Push(const T &item)
     }
 
     size_t _index = _tail & (Size - 1);
-    p_buffer[_index]._data = item;
+    m_buffer[_index]._data = item;
 
-    p_tail.store(_tail + 1, std::memory_order_release);
+    m_tail.store(_tail + 1, std::memory_order_release);
 
     return true;
 }
@@ -92,10 +92,10 @@ bool MutexQueue<T, Size>::Push(const T &item)
 template <typename T, size_t Size>
 bool MutexQueue<T, Size>::Push(T &&item)
 {
-    std::lock_guard<std::mutex> _lock(p_tail_mutex);
+    std::lock_guard<std::mutex> _lock(m_tail_mutex);
 
-    size_t _tail = p_tail.load(std::memory_order_relaxed);
-    size_t _head = p_head.load(std::memory_order_acquire);
+    size_t _tail = m_tail.load(std::memory_order_relaxed);
+    size_t _head = m_head.load(std::memory_order_acquire);
 
     if (_tail - _head >= Size)
     {
@@ -103,9 +103,9 @@ bool MutexQueue<T, Size>::Push(T &&item)
     }
 
     size_t _index = _tail & (Size - 1);
-    p_buffer[_index]._data = std::move(item);
+    m_buffer[_index]._data = std::move(item);
 
-    p_tail.store(_tail + 1, std::memory_order_release);
+    m_tail.store(_tail + 1, std::memory_order_release);
 
     return true;
 }
@@ -113,10 +113,10 @@ bool MutexQueue<T, Size>::Push(T &&item)
 template <typename T, size_t Size>
 bool MutexQueue<T, Size>::Pop(T &item)
 {
-    std::lock_guard<std::mutex> _lock(p_head_mutex);
+    std::lock_guard<std::mutex> _lock(m_head_mutex);
 
-    size_t _head = p_head.load(std::memory_order_relaxed);
-    size_t _tail = p_tail.load(std::memory_order_acquire);
+    size_t _head = m_head.load(std::memory_order_relaxed);
+    size_t _tail = m_tail.load(std::memory_order_acquire);
 
     if (_head == _tail)
     {
@@ -124,9 +124,9 @@ bool MutexQueue<T, Size>::Pop(T &item)
     }
 
     size_t _index = _head & (Size - 1);
-    item = std::move(p_buffer[_index]._data);
+    item = std::move(m_buffer[_index]._data);
 
-    p_head.store(_head + 1, std::memory_order_release);
+    m_head.store(_head + 1, std::memory_order_release);
 
     return true;
 }
@@ -134,16 +134,16 @@ bool MutexQueue<T, Size>::Pop(T &item)
 template <typename T, size_t Size>
 bool MutexQueue<T, Size>::IsEmpty() const
 {
-    size_t _head = p_head.load(std::memory_order_acquire);
-    size_t _tail = p_tail.load(std::memory_order_acquire);
+    size_t _head = m_head.load(std::memory_order_acquire);
+    size_t _tail = m_tail.load(std::memory_order_acquire);
     return _head == _tail;
 }
 
 template <typename T, size_t Size>
 size_t MutexQueue<T, Size>::GetSize() const
 {
-    size_t _head = p_head.load(std::memory_order_acquire);
-    size_t _tail = p_tail.load(std::memory_order_acquire);
+    size_t _head = m_head.load(std::memory_order_acquire);
+    size_t _tail = m_tail.load(std::memory_order_acquire);
 
     if (_tail >= _head)
     {

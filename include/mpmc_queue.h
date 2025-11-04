@@ -38,16 +38,16 @@ private:
         T _data;
     };
 
-    Slot p_buffer[Size];
+    Slot m_buffer[Size];
 
-    alignas(lfq::CACHE_LINE_SIZE) std::atomic<size_t> p_head;
-    alignas(lfq::CACHE_LINE_SIZE) std::atomic<size_t> p_tail;
+    alignas(lfq::CACHE_LINE_SIZE) std::atomic<size_t> m_head;
+    alignas(lfq::CACHE_LINE_SIZE) std::atomic<size_t> m_tail;
 };
 
 // ============================================================
 // 구현
 template <typename T, size_t Size>
-MPMCQueue<T, Size>::MPMCQueue() : p_head(0), p_tail(0)
+MPMCQueue<T, Size>::MPMCQueue() : m_head(0), m_tail(0)
 {
     static_assert(Size > 0, "Queue size must be greater than 0");
     static_assert((Size & (Size - 1)) == 0, "Queue size must be power of 2");
@@ -55,7 +55,7 @@ MPMCQueue<T, Size>::MPMCQueue() : p_head(0), p_tail(0)
     // 각 슬롯의 generation 초기화
     for (size_t i = 0; i < Size; ++i)
     {
-        p_buffer[i]._generation.store(i, std::memory_order_relaxed);
+        m_buffer[i]._generation.store(i, std::memory_order_relaxed);
     }
 }
 
@@ -102,8 +102,8 @@ bool MPMCQueue<T, Size>::IsEmpty() const
 template <typename T, size_t Size>
 size_t MPMCQueue<T, Size>::GetSize() const
 {
-    size_t _head = p_head.load(std::memory_order_acquire);
-    size_t _tail = p_tail.load(std::memory_order_acquire);
+    size_t _head = m_head.load(std::memory_order_acquire);
+    size_t _tail = m_tail.load(std::memory_order_acquire);
 
     if (_head >= _tail)
     {
