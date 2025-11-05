@@ -154,9 +154,9 @@ bool MPMCQueue<T, Size>::Push(T &&_item)
                 return true;
             }
         }
+        // 아직 Pop이 데이터를 가져가지 않음 (큐가 가득 참)
         else if (_generation < _head)
         {
-            // 아직 Pop이 데이터를 가져가지 않음 (큐가 가득 참)
             // tail과 비교하여 정말 가득 찼는지 확인
             size_t _tail = m_tail.load(std::memory_order_acquire);
 
@@ -177,18 +177,69 @@ bool MPMCQueue<T, Size>::Push(T &&_item)
     }
 }
 
-// TODO: pop 구현
+// pop 구현
 template <typename T, size_t Size>
-bool MPMCQueue<T, Size>::Pop(T &item)
+bool MPMCQueue<T, Size>::Pop(T &_item)
 {
-    return true;
+    size_t _tail = m_tail.load(std::memory_order_relaxed);
+
+    while (true)
+    {
+        // 현재 tail 위치의 슬롯 계산
+        size_t _idx = _tail & (Size - 1);
+        Slot& _slot = m_buffer[_idx];
+
+        // generation 읽기
+        size_t _generation = _slot._generation.load(std::memory_order_acquire);
+
+        // 이 슬롯에서 읽을 수 있는지 확인
+        // generation이 tail + 1이면 push가 완료되어 읽을 수 있음
+        if (_generation == _tail + 1)
+        {
+            // tail을 증가시켜 이 슬롯을 예약
+            if (m_tail.compare_exchange_weak(_tail, _tail + 1, std::memory_order_relaxed))
+            {
+                // 데이터 이동 (move semantics)
+                _item = std::move(_slot._data);
+
+                // generation을 tail + Size로 설정하여 다음 사이클에서 Push가 쓸 수 있게 함
+                _slot._generation.store(_tail + Size, std::memory_order_release);
+                return true;
+            }
+        }
+        // 아직 Push가 완료되지 않음 (큐가 비어있음)
+        else if (_generation < _tail + 1)
+        {
+            // head와 비교하여 정말 비었는지 확인
+            size_t _head = m_head.load(std::memory_order_acquire);
+
+            // 큐가 비어있는 경우
+            if (_tail >= _head)
+            {
+                // 실패
+                return false;
+            }
+
+            // 다른 스레드가 Push를 진행 중일 수 있으므로 재시도
+            _tail = m_tail.load(std::memory_order_relaxed);
+        }
+        // 다른 스레드에서 Pop 중인 경우 (generation > tail + 1)
+        else
+        {
+            // tail을 다시 읽어서 재시도
+            _tail = m_tail.load(std::memory_order_relaxed);
+        }
+    }
 }
 
-// TODO: IsEmpty 구현
 template <typename T, size_t Size>
 bool MPMCQueue<T, Size>::IsEmpty() const
 {
-    return true;
+    size_t _head = m_head.load(std::memory_order_acquire);
+    size_t _tail = m_tail.load(std::memory_order_acquire);
+
+    // tail이 head보다 크거나 같으면 큐가 비어있음
+    return _tail >= _head;
 }
 
 template <typename T, size_t Size>
