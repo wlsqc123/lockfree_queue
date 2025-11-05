@@ -6,11 +6,24 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# 빌드 타입이 설정되지 않은 경우 Release로 기본 설정
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+endif()
+
 # 컴파일 옵션
 if(MSVC)
     add_compile_options(/W4 /WX /utf-8)
+
+    # Release 빌드 최적화
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        add_compile_options(/O2 /Oi /GL)
+        add_link_options(/LTCG)
+    endif()
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -Werror -finput-charset=UTF-8 -fexec-charset=UTF-8)
+
+    # Release 빌드 최적화
     if(CMAKE_BUILD_TYPE STREQUAL "Release")
         add_compile_options(-O3 -march=native)
     endif()
