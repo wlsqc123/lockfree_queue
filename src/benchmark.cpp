@@ -11,8 +11,10 @@
 // 테스트용 데이터 구조체
 struct TestData
 {
-    int value; // 4by
-    char padding[lfq::CACHE_LINE_SIZE - sizeof(int) - sizeof(std::atomic<size_t>)]; // 캐시 라인 크기를 고려한 패딩
+    int value; // 4byte
+    char padding[lfq::CACHE_LINE_SIZE - sizeof(int) - sizeof(std::atomic<size_t>)]; // 52byte
+
+    // 총 56byte, 
 };
 
 template <typename QueueType>

@@ -49,8 +49,8 @@ private:
 template <typename T, size_t Size>
 MPMCQueue<T, Size>::MPMCQueue() : m_head(0), m_tail(0)
 {
-    static_assert(Size > 0, "Queue size must be greater than 0");
-    static_assert((Size & (Size - 1)) == 0, "Queue size must be power of 2");
+    static_assert(Size > 0, "MPMCQueue - 큐 사이즈가 0보다 커야 함");
+    static_assert((Size & (Size - 1)) == 0, "MPMCQueue - 큐 사이즈가 2의 제곱이어야 함");
 
     // 각 슬롯의 generation 초기화
     for (size_t i = 0; i < Size; ++i)
