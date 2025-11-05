@@ -65,7 +65,7 @@ MPMCQueue<T, Size>::~MPMCQueue()
     // 남은 데이터 정리
     T _item;
 
-    while(true == Pop(OUT _item))
+    while(true == Pop(_item))
     {
         // Pop에서 자동으로 소멸자 호출됨
     }
@@ -97,6 +97,7 @@ bool MPMCQueue<T, Size>::Push(const T &_item)
 
                 // generation을 증가시켜 Pop이 읽을 수 있게 함
                 _slot._generation.store(_head + 1, std::memory_order_release);
+
                 return true;
             }
         }
@@ -106,9 +107,9 @@ bool MPMCQueue<T, Size>::Push(const T &_item)
             // tail과 비교하여 정말 가득 찼는지 확인
             size_t _tail = m_tail.load(std::memory_order_acquire);
 
+            // 큐가 가득 찬 경우
             if (_head >= _tail + Size)
             {
-                // 큐가 가득 참
                 return false; 
             }
 
@@ -151,6 +152,7 @@ bool MPMCQueue<T, Size>::Push(T &&_item)
 
                 // generation을 증가시켜 Pop이 읽을 수 있게 함
                 _slot._generation.store(_head + 1, std::memory_order_release);
+
                 return true;
             }
         }
@@ -204,6 +206,7 @@ bool MPMCQueue<T, Size>::Pop(T &_item)
 
                 // generation을 tail + Size로 설정하여 다음 사이클에서 Push가 쓸 수 있게 함
                 _slot._generation.store(_tail + Size, std::memory_order_release);
+
                 return true;
             }
         }
