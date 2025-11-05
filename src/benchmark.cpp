@@ -5,6 +5,7 @@
 #include <memory>
 #include <thread>
 #include <vector>
+#include <windows.h>
 #include "../include/mpmc_queue.h"
 #include "../include/mutex_queue.h"
 
@@ -127,23 +128,26 @@ void RunBenchmark(const std::string &_queue_name, size_t _num_producers, size_t 
 
 int main()
 {
+    // Windows 콘솔 UTF-8 출력 설정
+    SetConsoleOutputCP(CP_UTF8);
+
     std::cout << "Lock-Free Queue vs Mutex Queue 성능 벤치마크" << std::endl;
     std::cout << "큐 크기: " << lfq::QUEUE_SIZE << std::endl;
 
     // 1p, 1c 테스트
-    // RunBenchmark<MPMCQueue<TestData, lockfree_queue::QUEUE_SIZE>>("Lock-Free MPMC Queue (1P/1C)", 1, 1);
+    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (1P/1C)", 1, 1);
     RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (1P/1C)", 1, 1);
 
     // 2p, 2c 테스트
-    // RunBenchmark<MPMCQueue<TestData, lockfree_queue::QUEUE_SIZE>>("Lock-Free MPMC Queue (2P/2C)", 2, 2);
+    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (2P/2C)", 2, 2);
     RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (2P/2C)", 2, 2);
 
     // 4p, 4c 테스트
-    // RunBenchmark<MPMCQueue<TestData, lockfree_queue::QUEUE_SIZE>>("Lock-Free MPMC Queue (4P/4C)", 4, 4);
+    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (4P/4C)", 4, 4);
     RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (4P/4C)", 4, 4);
 
     // 8p, 8c 테스트
-    // RunBenchmark<MPMCQueue<TestData, lockfree_queue::QUEUE_SIZE>>("Lock-Free MPMC Queue (8P/8C)", 8, 8);
+    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (8P/8C)", 8, 8);
     RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (8P/8C)", 8, 8);
 
     std::cout << "\n모든 벤치마크 완료" << std::endl;
