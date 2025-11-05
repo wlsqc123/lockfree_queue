@@ -146,9 +146,9 @@ int main()
     RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (4P/4C)", 4, 4);
     RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (4P/4C)", 4, 4);
 
-    // 8p, 8c 테스트
-    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (8P/8C)", 8, 8);
-    RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (8P/8C)", 8, 8);
+    // 6p, 6c 테스트 -> 테스트 CPU가 12스레드라 여기까지만 함
+    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (6P/6C)", 6, 6);
+    RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (6P/6C)", 6, 6);
 
     std::cout << "\n모든 벤치마크 완료" << std::endl;
 
