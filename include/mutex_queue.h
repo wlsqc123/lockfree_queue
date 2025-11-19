@@ -53,8 +53,8 @@ private:
 template <typename T, size_t Size>
 MutexQueue<T, Size>::MutexQueue() : m_tail(0), m_head(0)
 {
-    static_assert(Size > 0, "Queue size must be greater than 0");
-    static_assert((Size & (Size - 1)) == 0, "Queue size must be power of 2");
+    static_assert(Size > 0, "큐 크기는 0보다 커야 합니다");
+    static_assert((Size & (Size - 1)) == 0, "큐 크기는 2의 제곱이어야 합니다");
 }
 
 template <typename T, size_t Size>

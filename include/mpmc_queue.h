@@ -177,7 +177,7 @@ bool MPMCQueue<T, Size>::Push(T &&_item)
     }
 }
 
-// Pop implementation
+// Pop 구현
 template <typename T, size_t Size>
 bool MPMCQueue<T, Size>::Pop(T &_item)
 {
@@ -190,23 +190,23 @@ bool MPMCQueue<T, Size>::Pop(T &_item)
 
         size_t _generation = _slot._generation.load(std::memory_order_acquire);
 
-        // Check if the slot contains data for the current tail
+        // 현재 tail에 해당하는 데이터가 슬롯에 있는지 확인
         if (_generation == _tail + 1)
         {
             if (m_tail.compare_exchange_weak(_tail, _tail + 1, std::memory_order_relaxed))
             {
                 _item = std::move(_slot._data);
                 
-                // Update generation to allow the next Push to this slot
-                // The next Push will expect generation == tail + Size (which is the new head for that lap)
-                // Current tail is X. We consumed X. Next time this slot is used, it will be for index X + Size.
+                // 다음 Push가 이 슬롯을 사용할 수 있도록 generation 업데이트
+                // 다음 Push는 generation == tail + Size를 기대함 (해당 바퀴의 새로운 head)
+                // 현재 tail이 X일 때, X를 소비함. 다음 번에 이 슬롯이 사용될 때는 인덱스 X + Size가 됨.
                 _slot._generation.store(_tail + Size, std::memory_order_release);
                 return true;
             }
         }
         else if (_generation < _tail + 1)
         {
-            // Queue is empty or Push is in progress
+            // 큐가 비었거나 Push가 진행 중임
             size_t _head = m_head.load(std::memory_order_acquire);
             
             if (_tail >= _head)
@@ -219,7 +219,7 @@ bool MPMCQueue<T, Size>::Pop(T &_item)
         }
         else
         {
-            // Should not happen in normal flow if logic is correct, but retry
+            // 로직이 정확하다면 정상 흐름에서는 발생하지 않아야 하지만, 재시도
             _tail = m_tail.load(std::memory_order_relaxed);
         }
     }
