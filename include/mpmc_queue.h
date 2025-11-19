@@ -32,7 +32,7 @@ public:
 private:
     // 각 슬롯의 상태를 관리하는 구조체
     // ABA 문제 해결을 위한 generation 카운터
-    struct Slot
+    struct alignas(lfq::CACHE_LINE_SIZE) Slot
     {
         std::atomic<size_t> _generation;
         T _data;
@@ -65,7 +65,7 @@ MPMCQueue<T, Size>::~MPMCQueue()
     // 남은 데이터 정리
     T _item;
 
-    while(true == Pop(OUT _item))
+    while(true == Pop(_item))
     {
         // Pop에서 자동으로 소멸자 호출됨
     }
@@ -177,18 +177,60 @@ bool MPMCQueue<T, Size>::Push(T &&_item)
     }
 }
 
-// TODO: pop 구현
+// Pop implementation
 template <typename T, size_t Size>
-bool MPMCQueue<T, Size>::Pop(T &item)
+bool MPMCQueue<T, Size>::Pop(T &_item)
 {
-    return true;
+    size_t _tail = m_tail.load(std::memory_order_relaxed);
+
+    while (true)
+    {
+        size_t _idx = _tail & (Size - 1);
+        Slot& _slot = m_buffer[_idx];
+
+        size_t _generation = _slot._generation.load(std::memory_order_acquire);
+
+        // Check if the slot contains data for the current tail
+        if (_generation == _tail + 1)
+        {
+            if (m_tail.compare_exchange_weak(_tail, _tail + 1, std::memory_order_relaxed))
+            {
+                _item = std::move(_slot._data);
+                
+                // Update generation to allow the next Push to this slot
+                // The next Push will expect generation == tail + Size (which is the new head for that lap)
+                // Current tail is X. We consumed X. Next time this slot is used, it will be for index X + Size.
+                _slot._generation.store(_tail + Size, std::memory_order_release);
+                return true;
+            }
+        }
+        else if (_generation < _tail + 1)
+        {
+            // Queue is empty or Push is in progress
+            size_t _head = m_head.load(std::memory_order_acquire);
+            
+            if (_tail >= _head)
+            {
+                return false; // Empty
+            }
+            
+            // Retry
+            _tail = m_tail.load(std::memory_order_relaxed);
+        }
+        else
+        {
+            // Should not happen in normal flow if logic is correct, but retry
+            _tail = m_tail.load(std::memory_order_relaxed);
+        }
+    }
 }
 
-// TODO: IsEmpty 구현
 template <typename T, size_t Size>
 bool MPMCQueue<T, Size>::IsEmpty() const
 {
-    return true;
+    size_t _head = m_head.load(std::memory_order_acquire);
+    size_t _tail = m_tail.load(std::memory_order_acquire);
+    return _head <= _tail;
 }
 
 template <typename T, size_t Size>

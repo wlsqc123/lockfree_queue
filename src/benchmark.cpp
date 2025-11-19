@@ -93,8 +93,7 @@ void RunBenchmark(const std::string &_queue_name, size_t _num_producers, size_t 
     // 컨슈머 스레드 시작
     for (size_t i = 0; i < _num_consumers; ++i)
     {
-        _consumers.emplace_back(ConsumerThread<QueueType>, std::ref(*_queue), _operations_per_consumer,
-                                std::ref(_pop_count));
+        _consumers.emplace_back(ConsumerThread<QueueType>, std::ref(*_queue), _operations_per_consumer, std::ref(_pop_count));
     }
 
     // 모든 스레드 종료 대기
