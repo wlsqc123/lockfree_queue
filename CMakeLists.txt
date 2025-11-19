@@ -39,7 +39,7 @@ add_executable(main
 
 # 벤치마크 실행 파일
 add_executable(benchmark
-    tests/benchmark.cpp
+    src/benchmark.cpp
     include/define.h
     include/mpmc_queue.h
     include/mutex_queue.h)
