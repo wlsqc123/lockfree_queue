@@ -32,11 +32,6 @@ endif()
 # 인클루드 디렉토리
 include_directories(${PROJECT_SOURCE_DIR}/include)
 
-# 메인 실행 파일
-add_executable(main
-    src/main.cpp
-    include/define.h)
-
 # 벤치마크 실행 파일
 add_executable(benchmark
     src/benchmark.cpp
@@ -44,21 +39,7 @@ add_executable(benchmark
     include/mpmc_queue.h
     include/mutex_queue.h)
 
-# 테스트 옵션
-option(BUILD_TESTS "Build test programs" ON)
-
-if(BUILD_TESTS)
-    add_executable(test_mpmc
-        tests/test_mpmc.cpp
-        include/define.h
-        include/mpmc_queue.h)
-
-    enable_testing()
-    add_test(NAME MPMCTest COMMAND test_mpmc)
-endif()
-
 # 빌드 정보 출력
 message(STATUS "Lockfree Queue Configuration:")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
 message(STATUS "  Build Type: ${CMAKE_BUILD_TYPE}")
-message(STATUS "  Build Tests: ${BUILD_TESTS}")
