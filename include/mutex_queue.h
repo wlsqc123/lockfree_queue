@@ -17,15 +17,15 @@ public:
     MutexQueue();
     ~MutexQueue();
 
-    MutexQueue(MutexQueue &&) = delete;
-    MutexQueue(const MutexQueue &) = delete;
-    MutexQueue &operator=(MutexQueue &&) = delete;
-    MutexQueue &operator=(const MutexQueue &) = delete;
+    MutexQueue(MutexQueue&&) = delete;
+    MutexQueue(const MutexQueue&) = delete;
+    MutexQueue& operator=(MutexQueue&&) = delete;
+    MutexQueue& operator=(const MutexQueue&) = delete;
 
     // 여러 스레드에서 안전 호출 가능
-    bool Push(const T &_item);
-    bool Push(T &&_item);
-    bool Pop(T &_item);
+    bool Push(const T& _item);
+    bool Push(T&& _item);
+    bool Pop(T& _item);
 
     bool IsEmpty() const;
     size_t GetSize() const;
@@ -69,7 +69,7 @@ MutexQueue<T, Size>::~MutexQueue()
 }
 
 template <typename T, size_t Size>
-bool MutexQueue<T, Size>::Push(const T &item)
+bool MutexQueue<T, Size>::Push(const T& item)
 {
     std::lock_guard<std::mutex> _lock(m_tail_mutex);
 
@@ -90,7 +90,7 @@ bool MutexQueue<T, Size>::Push(const T &item)
 }
 
 template <typename T, size_t Size>
-bool MutexQueue<T, Size>::Push(T &&item)
+bool MutexQueue<T, Size>::Push(T&& item)
 {
     std::lock_guard<std::mutex> _lock(m_tail_mutex);
 
@@ -111,7 +111,7 @@ bool MutexQueue<T, Size>::Push(T &&item)
 }
 
 template <typename T, size_t Size>
-bool MutexQueue<T, Size>::Pop(T &item)
+bool MutexQueue<T, Size>::Pop(T& item)
 {
     std::lock_guard<std::mutex> _lock(m_head_mutex);
 
