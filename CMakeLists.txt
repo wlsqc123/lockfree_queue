@@ -39,6 +39,11 @@ add_executable(benchmark
     include/mpmc_queue.h
     include/mutex_queue.h)
 
+add_executable(mpmc_queue_tests
+    tests/mpmc_queue_tests.cpp
+    include/define.h
+    include/mpmc_queue.h)
+
 # 빌드 정보 출력
 message(STATUS "Lockfree Queue Configuration:")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
