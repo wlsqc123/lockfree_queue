@@ -1,5 +1,6 @@
 #include <atomic>
 #include <cstddef>
+#include <type_traits>
 #include "define.h"
 
 #pragma warning(push)
@@ -13,7 +14,7 @@ class MPMCQueue
 {
 public:
     MPMCQueue();
-    ~MPMCQueue();
+    ~MPMCQueue() = default;
 
     MPMCQueue(MPMCQueue&&) = delete;
     MPMCQueue(const MPMCQueue&) = delete;
@@ -21,9 +22,9 @@ public:
     MPMCQueue& operator=(const MPMCQueue&) = delete;
 
     // 여러 스레드에서 안전 호출 가능
-    bool Push(const T& _item);
-    bool Push(T&& _item);
-    bool Pop(T& _item);
+    bool Push(const T& _item) noexcept;
+    bool Push(T&& _item) noexcept;
+    bool Pop(T& _item) noexcept;
 
     bool IsEmpty() const;
     size_t GetSize() const;
@@ -61,22 +62,12 @@ MPMCQueue<T, Size>::MPMCQueue() : m_head(0), m_tail(0)
     }
 }
 
-template <typename T, size_t Size>
-MPMCQueue<T, Size>::~MPMCQueue()
-{
-    // 남은 데이터 정리
-    T _item;
-
-    while(true == Pop(_item))
-    {
-        // Pop에서 자동으로 소멸자 호출됨
-    }
-}
-
 // lvalue 참조 버전 Push 구현 (Tail에 추가)
 template <typename T, size_t Size>
-bool MPMCQueue<T, Size>::Push(const T& _item)
+bool MPMCQueue<T, Size>::Push(const T& _item) noexcept
 {
+    static_assert(std::is_nothrow_copy_assignable_v<T>, "T는 예외 없이 복사 대입할 수 있어야 함");
+
     size_t _tail = m_tail.load(std::memory_order_relaxed); // Write Index
 
     while (true)
@@ -128,8 +119,10 @@ bool MPMCQueue<T, Size>::Push(const T& _item)
 
 // (rvalue 참조 버전) Push 구현 (Tail에 추가)
 template <typename T, size_t Size>
-bool MPMCQueue<T, Size>::Push(T&& _item)
+bool MPMCQueue<T, Size>::Push(T&& _item) noexcept
 {
+    static_assert(std::is_nothrow_move_assignable_v<T>, "T는 예외 없이 이동 대입할 수 있어야 함");
+
     size_t _tail = m_tail.load(std::memory_order_relaxed); // Write Index
 
     while (true)
@@ -181,8 +174,10 @@ bool MPMCQueue<T, Size>::Push(T&& _item)
 
 // Pop 구현 (Head에서 제거)
 template <typename T, size_t Size>
-bool MPMCQueue<T, Size>::Pop(T& _item)
+bool MPMCQueue<T, Size>::Pop(T& _item) noexcept
 {
+    static_assert(std::is_nothrow_move_assignable_v<T>, "T는 예외 없이 이동 대입할 수 있어야 함");
+
     size_t _head = m_head.load(std::memory_order_relaxed); // Read Index
 
     while (true)
