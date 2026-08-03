@@ -134,16 +134,16 @@ namespace
 
     // 지정한 수의 생산자와 소비자를 동시에 실행해 각 값의 소비 횟수를 기록한다.
     // 전체 실행 후 입력/출력 수, 누락, 중복, 범위 밖 값과 큐의 최종 상태를 검증한다.
-    void RunMpmcExactlyOnceCase(std::size_t _producer_count, std::size_t _consumer_count, std::size_t _items_per_producer)
+    void RunMpmcExactlyOnceCase(size_t _producer_count, size_t _consumer_count, size_t _items_per_producer)
     {
-        const std::size_t _total_item_count = _producer_count * _items_per_producer;
-        MPMCQueue<std::size_t, 64> _queue;
+        const size_t _total_item_count = _producer_count * _items_per_producer;
+        MPMCQueue<size_t, 64> _queue;
 
         std::vector<std::atomic<unsigned int>> _seen(_total_item_count);
 
-        std::atomic<std::size_t> _push_count{0};
-        std::atomic<std::size_t> _pop_count{0};
-        std::atomic<std::size_t> _invalid_count{0};
+        std::atomic<size_t> _push_count{0};
+        std::atomic<size_t> _pop_count{0};
+        std::atomic<size_t> _invalid_count{0};
 
         for (auto& _count : _seen)
         {
@@ -159,10 +159,10 @@ namespace
         {
             _producers.emplace_back([&, _producer_index]()
             {
-                const std::size_t _first_value = _producer_index * _items_per_producer;
-                for (std::size_t _offset = 0; _offset < _items_per_producer; ++_offset)
+                const size_t _first_value = _producer_index * _items_per_producer;
+                for (size_t _offset = 0; _offset < _items_per_producer; ++_offset)
                 {
-                    const std::size_t _value = _first_value + _offset;
+                    const size_t _value = _first_value + _offset;
                     while (false == _queue.Push(_value))
                     {
                     }
@@ -177,13 +177,13 @@ namespace
             {
                 while (_pop_count.load(std::memory_order_acquire) < _total_item_count)
                 {
-                    std::size_t _value = 0;
+                    size_t _value = 0;
                     if (false == _queue.Pop(_value))
                     {
                         continue;
                     }
 
-                    const std::size_t _previous_pop_count = _pop_count.fetch_add(1, std::memory_order_acq_rel);
+                    const size_t _previous_pop_count = _pop_count.fetch_add(1, std::memory_order_acq_rel);
 
                     if (_previous_pop_count >= _total_item_count || _value >= _total_item_count)
                     {
@@ -205,8 +205,8 @@ namespace
             _consumer.join();
         }
 
-        std::size_t _missing_count = 0;
-        std::size_t _duplicate_count = 0;
+        size_t _missing_count = 0;
+        size_t _duplicate_count = 0;
 
         for (const auto& _count : _seen)
         {
@@ -221,9 +221,9 @@ namespace
             }
         }
 
-        const std::size_t _final_push_count = _push_count.load(std::memory_order_relaxed);
-        const std::size_t _final_pop_count = _pop_count.load(std::memory_order_relaxed);
-        const std::size_t _final_invalid_count = _invalid_count.load(std::memory_order_relaxed);
+        const size_t _final_push_count = _push_count.load(std::memory_order_relaxed);
+        const size_t _final_pop_count = _pop_count.load(std::memory_order_relaxed);
+        const size_t _final_invalid_count = _invalid_count.load(std::memory_order_relaxed);
 
         Check(_final_push_count == _total_item_count, "전체 Push 수가 예상과 다름");
         Check(_final_pop_count == _total_item_count, "전체 Pop 수가 예상과 다름");
@@ -247,7 +247,7 @@ namespace
     // 4P/1C, 1P/4C, 4P/4C 구성에서 모든 값이 정확히 한 번 전달되는지 검증한다.
     void TestMpmcExactlyOnceDelivery()
     {
-        constexpr std::size_t ItemsPerProducer = 25'000;
+        constexpr size_t ItemsPerProducer = 25'000;
 
         RunMpmcExactlyOnceCase(4, 1, ItemsPerProducer);
         RunMpmcExactlyOnceCase(1, 4, ItemsPerProducer);
