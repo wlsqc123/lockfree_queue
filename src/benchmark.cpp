@@ -1,155 +1,243 @@
-﻿#include <atomic>
+#include <algorithm>
+#include <array>
+#include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <string>
 #include <thread>
 #include <vector>
 #include <windows.h>
+
 #include "../include/mpmc_queue.h"
 #include "../include/mutex_queue.h"
 
-// 테스트용 데이터 구조체
+constexpr size_t BENCHMARK_REPEAT_COUNT = 3;
+
+// 큐 슬롯 하나가 캐시 라인 하나를 사용하도록 데이터 크기를 맞춘다.
 struct TestData
 {
-    int value; // 4byte
-    char padding[lfq::CACHE_LINE_SIZE - sizeof(int) - sizeof(std::atomic<size_t>)]; // 52byte
+    int value;
+    char padding[lfq::CACHE_LINE_SIZE - sizeof(int) - sizeof(std::atomic<size_t>)];
+};
 
-    // 총 56byte, 
+struct BenchmarkResult
+{
+    double duration_ms;
+    double messages_per_sec;
+    double operations_per_sec;
+    double throughput_mb;
+    size_t message_count;
+    size_t push_retry_count;
+    size_t pop_retry_count;
+    std::uint64_t checksum;
+    std::uint64_t expected_checksum;
 };
 
 template <typename QueueType>
-void ProducerThread(QueueType &_queue, size_t _thread_id, std::atomic<size_t> &_success_count)
+void ProducerThread(QueueType& _queue, size_t _thread_id, std::atomic<size_t>& _retry_count)
 {
-    size_t _local_success = 0;
+    size_t _local_retry_count = 0;
 
     for (size_t i = 0; i < lfq::OPERATIONS_PER_THREAD; ++i)
     {
         TestData _data{static_cast<int>(_thread_id * lfq::OPERATIONS_PER_THREAD + i)};
 
-        while (!_queue.Push(_data))
+        while (false == _queue.Push(_data))
         {
-            // 큐가 가득 찬 경우 재시도
+            ++_local_retry_count;
             std::this_thread::yield();
         }
-
-        ++_local_success;
     }
 
-    _success_count.fetch_add(_local_success, std::memory_order_relaxed);
+    _retry_count.fetch_add(_local_retry_count, std::memory_order_relaxed);
 }
 
 template <typename QueueType>
-void ConsumerThread(QueueType &_queue, size_t _operations, std::atomic<size_t> &_success_count)
+void ConsumerThread(
+    QueueType& _queue,
+    size_t _operation_count,
+    std::atomic<size_t>& _retry_count,
+    std::atomic<std::uint64_t>& _checksum)
 {
-    size_t _local_success = 0;
+    size_t _success_count = 0;
+    size_t _local_retry_count = 0;
+    std::uint64_t _local_checksum = 0;
     TestData _data;
 
-    while (_local_success < _operations)
+    while (_success_count < _operation_count)
     {
-        if (_queue.Pop(_data))
+        if (true == _queue.Pop(_data))
         {
-            ++_local_success;
+            ++_success_count;
+            _local_checksum += static_cast<std::uint64_t>(_data.value);
         }
         else
         {
-            // 큐가 비어있는 경우 재시도
+            ++_local_retry_count;
             std::this_thread::yield();
         }
     }
 
-    _success_count.fetch_add(_local_success, std::memory_order_relaxed);
+    _retry_count.fetch_add(_local_retry_count, std::memory_order_relaxed);
+    _checksum.fetch_add(_local_checksum, std::memory_order_relaxed);
 }
 
-// 벤치마크 실행 함수
 template <typename QueueType>
-void RunBenchmark(const std::string &_queue_name, size_t _num_producers, size_t _num_consumers)
+BenchmarkResult RunBenchmarkOnce(size_t _producer_count, size_t _consumer_count)
 {
-    std::cout << "\n========================================" << std::endl;
-    std::cout << _queue_name << " 테스트" << std::endl;
-    std::cout << "프로듀서: " << _num_producers << ", 컨슈머: " << _num_consumers << std::endl;
-    std::cout << "스레드당 작업 수: " << lfq::OPERATIONS_PER_THREAD << std::endl;
-
-    // 큐를 힙에 할당하여 스택 오버플로우 방지
     auto _queue = std::make_unique<QueueType>();
-    std::atomic<size_t> _push_count{0};
-    std::atomic<size_t> _pop_count{0};
+    std::atomic<size_t> _push_retry_count{0};
+    std::atomic<size_t> _pop_retry_count{0};
+    std::atomic<std::uint64_t> _checksum{0};
 
-    // 총 작업 수 계산
-    size_t _total_operations = _num_producers * lfq::OPERATIONS_PER_THREAD;
-    size_t _operations_per_consumer = _total_operations / _num_consumers;
+    const size_t _total_operation_count = _producer_count * lfq::OPERATIONS_PER_THREAD;
+    const size_t _base_operation_count = _total_operation_count / _consumer_count;
+    const size_t _remaining_operation_count = _total_operation_count % _consumer_count;
 
     std::vector<std::thread> _producers;
     std::vector<std::thread> _consumers;
+    _producers.reserve(_producer_count);
+    _consumers.reserve(_consumer_count);
 
-    // 시작 시간 측정
-    auto _start_time = std::chrono::high_resolution_clock::now();
+    const auto _start_time = std::chrono::steady_clock::now();
 
-    // 프로듀서 스레드 시작
-    for (size_t i = 0; i < _num_producers; ++i)
+    for (size_t i = 0; i < _producer_count; ++i)
     {
-        _producers.emplace_back(ProducerThread<QueueType>, std::ref(*_queue), i, std::ref(_push_count));
+        _producers.emplace_back(
+            ProducerThread<QueueType>,
+            std::ref(*_queue),
+            i,
+            std::ref(_push_retry_count));
     }
 
-    // 컨슈머 스레드 시작
-    for (size_t i = 0; i < _num_consumers; ++i)
+    for (size_t i = 0; i < _consumer_count; ++i)
     {
-        _consumers.emplace_back(ConsumerThread<QueueType>, std::ref(*_queue), _operations_per_consumer, std::ref(_pop_count));
+        const size_t _operation_count = _base_operation_count + (i < _remaining_operation_count ? 1 : 0);
+
+        _consumers.emplace_back(
+            ConsumerThread<QueueType>,
+            std::ref(*_queue),
+            _operation_count,
+            std::ref(_pop_retry_count),
+            std::ref(_checksum));
     }
 
-    // 모든 스레드 종료 대기
-    for (auto &t : _producers)
+    for (auto& _producer : _producers)
     {
-        t.join();
+        _producer.join();
     }
 
-    for (auto &t : _consumers)
+    for (auto& _consumer : _consumers)
     {
-        t.join();
+        _consumer.join();
     }
 
-    // 종료 시간 측정
-    auto _end_time = std::chrono::high_resolution_clock::now();
-    auto _duration = std::chrono::duration_cast<std::chrono::milliseconds>(_end_time - _start_time);
+    const auto _end_time = std::chrono::steady_clock::now();
+    const double _duration_sec = std::chrono::duration<double>(_end_time - _start_time).count();
+    const double _messages_per_sec = static_cast<double>(_total_operation_count) / _duration_sec;
+    const double _operations_per_sec = _messages_per_sec * 2.0;
+    const double _throughput_mb =
+        (_operations_per_sec * sizeof(TestData)) / (1024.0 * 1024.0);
+    const std::uint64_t _total_operation_count64 = static_cast<std::uint64_t>(_total_operation_count);
+    const std::uint64_t _expected_checksum =
+        (_total_operation_count64 * (_total_operation_count64 - 1)) / 2;
 
-    // 결과 출력
-    double _ops_per_sec = (_total_operations * 2.0 * 1000.0) / _duration.count(); // push + pop
-    double _throughput_mb = (_ops_per_sec * sizeof(TestData)) / (1024.0 * 1024.0);
+    return BenchmarkResult{
+        _duration_sec * 1000.0,
+        _messages_per_sec,
+        _operations_per_sec,
+        _throughput_mb,
+        _total_operation_count,
+        _push_retry_count.load(std::memory_order_relaxed),
+        _pop_retry_count.load(std::memory_order_relaxed),
+        _checksum.load(std::memory_order_relaxed),
+        _expected_checksum};
+}
 
-    std::cout << "========================================" << std::endl;
-    std::cout << "실행 시간: " << _duration.count() << " ms" << std::endl;
-    std::cout << "Push 성공: " << _push_count << " / " << _total_operations << std::endl;
-    std::cout << "Pop 성공: " << _pop_count << " / " << _total_operations << std::endl;
-    std::cout << "처리량: " << std::fixed << std::setprecision(2) << _ops_per_sec << " ops/sec" << std::endl;
-    std::cout << "데이터 처리량: " << std::fixed << std::setprecision(2) << _throughput_mb << " MB/s" << std::endl;
-    std::cout << "========================================" << std::endl;
+BenchmarkResult GetMedianResult(std::array<BenchmarkResult, BENCHMARK_REPEAT_COUNT> _results)
+{
+    std::sort(_results.begin(), _results.end(), [](const BenchmarkResult& _left, const BenchmarkResult& _right)
+    {
+        return _left.duration_ms < _right.duration_ms;
+    });
+
+    return _results[BENCHMARK_REPEAT_COUNT / 2];
+}
+
+void PrintResult(const char* _queue_name, const BenchmarkResult& _result)
+{
+    const bool _checksum_valid = _result.checksum == _result.expected_checksum;
+
+    std::cout << "\n" << _queue_name << " 중앙값\n";
+    std::cout << "  실행 시간: " << std::fixed << std::setprecision(2)
+              << _result.duration_ms << " ms\n";
+    std::cout << "  처리 메시지: " << _result.message_count << "개\n";
+    std::cout << "  메시지 처리량: " << _result.messages_per_sec << " messages/sec\n";
+    std::cout << "  큐 연산 처리량: " << _result.operations_per_sec << " ops/sec\n";
+    std::cout << "  데이터 처리량(Push+Pop): " << _result.throughput_mb << " MB/s\n";
+    std::cout << "  Push 재시도: " << _result.push_retry_count << '\n';
+    std::cout << "  Pop 재시도: " << _result.pop_retry_count << '\n';
+    std::cout << "  체크섬: " << _result.checksum << " / " << _result.expected_checksum
+              << " (" << (true == _checksum_valid ? "정상" : "오류") << ")\n";
+}
+
+template <typename LockFreeQueueType, typename TwoLockQueueType>
+void RunComparison(const char* _case_name, size_t _producer_count, size_t _consumer_count)
+{
+    std::array<BenchmarkResult, BENCHMARK_REPEAT_COUNT> _lock_free_results;
+    std::array<BenchmarkResult, BENCHMARK_REPEAT_COUNT> _two_lock_results;
+
+    std::cout << "\n============================================================\n";
+    std::cout << _case_name << '\n';
+    std::cout << "생산자=" << _producer_count
+              << " | 소비자=" << _consumer_count
+              << " | 스레드당 작업=" << lfq::OPERATIONS_PER_THREAD << '\n';
+
+    for (size_t i = 0; i < BENCHMARK_REPEAT_COUNT; ++i)
+    {
+        std::cout << "\n[" << i + 1 << '/' << BENCHMARK_REPEAT_COUNT << "] ";
+
+        if (0 == (i % 2))
+        {
+            std::cout << "Lock-Free → Two-Lock 순서로 측정\n";
+            _lock_free_results[i] = RunBenchmarkOnce<LockFreeQueueType>(_producer_count, _consumer_count);
+            _two_lock_results[i] = RunBenchmarkOnce<TwoLockQueueType>(_producer_count, _consumer_count);
+        }
+        else
+        {
+            std::cout << "Two-Lock → Lock-Free 순서로 측정\n";
+            _two_lock_results[i] = RunBenchmarkOnce<TwoLockQueueType>(_producer_count, _consumer_count);
+            _lock_free_results[i] = RunBenchmarkOnce<LockFreeQueueType>(_producer_count, _consumer_count);
+        }
+
+        std::cout << "  Lock-Free: " << std::fixed << std::setprecision(2)
+                  << _lock_free_results[i].duration_ms << " ms"
+                  << " | Two-Lock: " << _two_lock_results[i].duration_ms << " ms\n";
+    }
+
+    PrintResult("Lock-Free MPMC Queue", GetMedianResult(_lock_free_results));
+    PrintResult("Two-Lock Queue", GetMedianResult(_two_lock_results));
 }
 
 int main()
 {
-    // Windows 콘솔 UTF-8 출력 설정
     SetConsoleOutputCP(CP_UTF8);
 
-    std::cout << "Lock-Free Queue vs Mutex Queue 성능 벤치마크" << std::endl;
-    std::cout << "큐 크기: " << lfq::QUEUE_SIZE << std::endl;
+    using LockFreeQueue = MPMCQueue<TestData, lfq::QUEUE_SIZE>;
+    using TwoLockQueue = MutexQueue<TestData, lfq::QUEUE_SIZE>;
 
-    // 1p, 1c 테스트
-    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (1P/1C)", 1, 1);
-    RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (1P/1C)", 1, 1);
+    std::cout << "Lock-Free Queue vs Two-Lock Queue 성능 벤치마크\n";
+    std::cout << "큐 크기=" << lfq::QUEUE_SIZE
+              << " | 반복=" << BENCHMARK_REPEAT_COUNT << "회 후 중앙값 사용\n";
 
-    // 2p, 2c 테스트
-    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (2P/2C)", 2, 2);
-    RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (2P/2C)", 2, 2);
+    RunComparison<LockFreeQueue, TwoLockQueue>("1 생산자 / 1 소비자", 1, 1);
+    RunComparison<LockFreeQueue, TwoLockQueue>("2 생산자 / 2 소비자", 2, 2);
+    RunComparison<LockFreeQueue, TwoLockQueue>("4 생산자 / 4 소비자", 4, 4);
+    RunComparison<LockFreeQueue, TwoLockQueue>("6 생산자 / 6 소비자", 6, 6);
 
-    // 4p, 4c 테스트
-    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (4P/4C)", 4, 4);
-    RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (4P/4C)", 4, 4);
-
-    // 6p, 6c 테스트 -> 테스트 CPU가 12스레드라 여기까지만 함
-    RunBenchmark<MPMCQueue<TestData, lfq::QUEUE_SIZE>>("Lock-Free MPMC Queue (6P/6C)", 6, 6);
-    RunBenchmark<MutexQueue<TestData, lfq::QUEUE_SIZE>>("Mutex Queue (6P/6C)", 6, 6);
-
-    std::cout << "\n모든 벤치마크 완료" << std::endl;
-
+    std::cout << "\n모든 벤치마크 완료\n";
     return 0;
 }
