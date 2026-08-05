@@ -44,6 +44,17 @@ add_executable(mpmc_queue_tests
     include/define.h
     include/mpmc_queue.h)
 
+find_package(Threads REQUIRED)
+add_executable(spsc_q_tests src/spsc_q_tests.cpp)
+target_link_libraries(spsc_q_tests PRIVATE Threads::Threads)
+
+if(MSVC)
+    target_compile_options(spsc_q_tests PRIVATE /wd4324)
+endif()
+
+enable_testing()
+add_test(NAME spsc_q_tests COMMAND spsc_q_tests)
+
 # 빌드 정보 출력
 message(STATUS "Lockfree Queue Configuration:")
 message(STATUS "  C++ Standard: ${CMAKE_CXX_STANDARD}")
